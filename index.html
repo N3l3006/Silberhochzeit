@@ -10,7 +10,7 @@
   <main>
     <div class="toolbar">
       <button id="resetBtn" type="button">Alles leeren</button>
-      <button id="printBtn" type="button">Drucken / als PDF</button>
+      <button id="saveBtn" type="button">Als Bild speichern</button>
     </div>
 
     <section class="sheet" id="sheet" aria-label="Silberhochzeit Nina und Dirk">
@@ -21,48 +21,86 @@
       <textarea class="answer a5" aria-label="Nina und Dirk passen perfekt zusammen, weil"></textarea>
       <textarea class="answer a6" aria-label="Das wünschst du den beiden für die nächsten 25 Jahre"></textarea>
 
-      <label class="photo p1" title="Foto auswählen">
-        <input type="file" accept="image/*">
-        <img alt="Erstes eingefügtes Foto">
-      </label>
-      <label class="photo p2" title="Foto auswählen">
-        <input type="file" accept="image/*">
-        <img alt="Zweites eingefügtes Foto">
-      </label>
+      <label class="photo p1" title="Foto auswählen"><input type="file" accept="image/*"><img alt="Erstes eingefügtes Foto"></label>
+      <label class="photo p2" title="Foto auswählen"><input type="file" accept="image/*"><img alt="Zweites eingefügtes Foto"></label>
     </section>
-    <p class="hint">Tippe direkt in die weißen Felder. Für ein Foto einfach auf eines der beiden Fotofelder tippen.</p>
+    <p class="hint">Tippe direkt in die weißen Felder. Die Schrift wird bei längeren Antworten automatisch kleiner. Über „Als Bild speichern“ kannst du die fertige Seite direkt speichern und verschicken.</p>
   </main>
 <script>
 const inputs=[...document.querySelectorAll('.answer')];
+function fitText(el){
+  const sheet=document.getElementById('sheet');
+  const base=Math.max(11, sheet.clientWidth*0.0233);
+  let size=base;
+  el.style.fontSize=size+'px';
+  while(el.scrollHeight>el.clientHeight+1 && size>8){size-=0.5;el.style.fontSize=size+'px';}
+}
+function fitAll(){inputs.forEach(fitText)}
 inputs.forEach((el,i)=>{
   el.value=localStorage.getItem('silberhochzeit_text_'+i)||'';
-  el.addEventListener('input',()=>localStorage.setItem('silberhochzeit_text_'+i,el.value));
+  el.addEventListener('input',()=>{localStorage.setItem('silberhochzeit_text_'+i,el.value);fitText(el)});
 });
+window.addEventListener('load',fitAll); window.addEventListener('resize',fitAll);
 
 document.querySelectorAll('.photo').forEach((label,i)=>{
-  const input=label.querySelector('input');
-  const img=label.querySelector('img');
+  const input=label.querySelector('input'), img=label.querySelector('img');
   const saved=localStorage.getItem('silberhochzeit_photo_'+i);
-  if(saved){img.src=saved; label.classList.add('has-photo');}
+  if(saved){img.src=saved;label.classList.add('has-photo');}
   input.addEventListener('change',()=>{
-    const file=input.files && input.files[0]; if(!file) return;
+    const file=input.files&&input.files[0]; if(!file)return;
     const reader=new FileReader();
-    reader.onload=e=>{
-      img.src=e.target.result; label.classList.add('has-photo');
-      try{localStorage.setItem('silberhochzeit_photo_'+i,e.target.result)}catch(err){}
-    };
+    reader.onload=e=>{img.src=e.target.result;label.classList.add('has-photo');try{localStorage.setItem('silberhochzeit_photo_'+i,e.target.result)}catch(err){}};
     reader.readAsDataURL(file);
   });
 });
 
-document.getElementById('printBtn').onclick=()=>window.print();
+function drawCover(ctx,img,x,y,w,h){
+  const ir=img.naturalWidth/img.naturalHeight, br=w/h; let sx=0,sy=0,sw=img.naturalWidth,sh=img.naturalHeight;
+  if(ir>br){sw=sh*br;sx=(img.naturalWidth-sw)/2}else{sh=sw/br;sy=(img.naturalHeight-sh)/2}
+  ctx.drawImage(img,sx,sy,sw,sh,x,y,w,h);
+}
+function wrappedLines(ctx,text,maxWidth){
+  const out=[]; for(const para of (text||'').split('\n')){
+    if(!para){out.push('');continue} let line='';
+    for(const word of para.split(/\s+/)){
+      const test=line?line+' '+word:word;
+      if(ctx.measureText(test).width<=maxWidth||!line) line=test; else{out.push(line);line=word}
+    } if(line)out.push(line);
+  } return out;
+}
+async function saveAsImage(){
+  const btn=document.getElementById('saveBtn'); btn.disabled=true; btn.textContent='Bild wird erstellt …';
+  try{
+    const W=2480,H=3508, canvas=document.createElement('canvas'); canvas.width=W;canvas.height=H; const ctx=canvas.getContext('2d');
+    const bg=new Image(); bg.src='vorlage-a4.jpg'; await bg.decode(); ctx.drawImage(bg,0,0,W,H);
+    const rects=[
+      [.128,.281,.81,.046],[.128,.360,.81,.046],[.128,.438,.81,.046],
+      [.128,.517,.81,.046],[.128,.596,.81,.046],[.128,.675,.81,.046]
+    ];
+    inputs.forEach((el,i)=>{
+      const [xp,yp,wp,hp]=rects[i], x=xp*W,y=yp*H,w=wp*W,h=hp*H, pad=18;
+      let fs=48, lines=[];
+      do{ctx.font=`${fs}px Georgia, serif`;lines=wrappedLines(ctx,el.value,w-pad*2);if(lines.length*fs*1.22<=h-pad*2)break;fs-=2}while(fs>24);
+      ctx.fillStyle='#8f1720';ctx.textBaseline='top';ctx.font=`${fs}px Georgia, serif`;
+      lines.forEach((line,j)=>ctx.fillText(line,x+pad,y+pad+j*fs*1.22,w-pad*2));
+    });
+    const photos=[...document.querySelectorAll('.photo')];
+    const prects=[[.13,.734,.362,.161],[.513,.734,.364,.161]];
+    photos.forEach((label,i)=>{const img=label.querySelector('img');if(img.src&&img.complete){const [xp,yp,wp,hp]=prects[i];drawCover(ctx,img,xp*W,yp*H,wp*W,hp*H)}});
+    const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.95));
+    const file=new File([blob],'Silberhochzeit-Nina-und-Dirk.jpg',{type:'image/jpeg'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})&&/iPhone|iPad|Android/i.test(navigator.userAgent)){
+      try{await navigator.share({files:[file],title:'Silberhochzeit Nina & Dirk'});return}catch(e){if(e.name==='AbortError')return}
+    }
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=file.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+  }catch(e){alert('Das Bild konnte leider nicht gespeichert werden. Bitte versuche es noch einmal.');console.error(e)}
+  finally{btn.disabled=false;btn.textContent='Als Bild speichern'}
+}
+document.getElementById('saveBtn').onclick=saveAsImage;
 document.getElementById('resetBtn').onclick=()=>{
-  if(!confirm('Wirklich alle Texte und Fotos löschen?')) return;
-  inputs.forEach((el,i)=>{el.value='';localStorage.removeItem('silberhochzeit_text_'+i)});
-  document.querySelectorAll('.photo').forEach((label,i)=>{
-    label.classList.remove('has-photo'); label.querySelector('img').removeAttribute('src');
-    label.querySelector('input').value=''; localStorage.removeItem('silberhochzeit_photo_'+i);
-  });
+  if(!confirm('Wirklich alle Texte und Fotos löschen?'))return;
+  inputs.forEach((el,i)=>{el.value='';localStorage.removeItem('silberhochzeit_text_'+i);fitText(el)});
+  document.querySelectorAll('.photo').forEach((label,i)=>{label.classList.remove('has-photo');label.querySelector('img').removeAttribute('src');label.querySelector('input').value='';localStorage.removeItem('silberhochzeit_photo_'+i)});
 };
 </script>
 </body>
