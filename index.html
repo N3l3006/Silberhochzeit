@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Nina & Dirk – 25 Jahre gemeinsam</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="toolbar">
+      <button id="resetBtn" type="button">Alles leeren</button>
+      <button id="printBtn" type="button">Drucken / als PDF</button>
+    </div>
+
+    <section class="sheet" id="sheet" aria-label="Silberhochzeit Nina und Dirk">
+      <textarea class="answer a1" aria-label="Diese Seite ist von"></textarea>
+      <textarea class="answer a2" aria-label="Woher kennst du Nina und Dirk"></textarea>
+      <textarea class="answer a3" aria-label="Das verbindest du mit den beiden"></textarea>
+      <textarea class="answer a4" aria-label="Dein bestes Erlebnis mit Nina und Dirk"></textarea>
+      <textarea class="answer a5" aria-label="Nina und Dirk passen perfekt zusammen, weil"></textarea>
+      <textarea class="answer a6" aria-label="Das wünschst du den beiden für die nächsten 25 Jahre"></textarea>
+
+      <label class="photo p1" title="Foto auswählen">
+        <input type="file" accept="image/*">
+        <img alt="Erstes eingefügtes Foto">
+      </label>
+      <label class="photo p2" title="Foto auswählen">
+        <input type="file" accept="image/*">
+        <img alt="Zweites eingefügtes Foto">
+      </label>
+    </section>
+    <p class="hint">Tippe direkt in die weißen Felder. Für ein Foto einfach auf eines der beiden Fotofelder tippen.</p>
+  </main>
+<script>
+const inputs=[...document.querySelectorAll('.answer')];
+inputs.forEach((el,i)=>{
+  el.value=localStorage.getItem('silberhochzeit_text_'+i)||'';
+  el.addEventListener('input',()=>localStorage.setItem('silberhochzeit_text_'+i,el.value));
+});
+
+document.querySelectorAll('.photo').forEach((label,i)=>{
+  const input=label.querySelector('input');
+  const img=label.querySelector('img');
+  const saved=localStorage.getItem('silberhochzeit_photo_'+i);
+  if(saved){img.src=saved; label.classList.add('has-photo');}
+  input.addEventListener('change',()=>{
+    const file=input.files && input.files[0]; if(!file) return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      img.src=e.target.result; label.classList.add('has-photo');
+      try{localStorage.setItem('silberhochzeit_photo_'+i,e.target.result)}catch(err){}
+    };
+    reader.readAsDataURL(file);
+  });
+});
+
+document.getElementById('printBtn').onclick=()=>window.print();
+document.getElementById('resetBtn').onclick=()=>{
+  if(!confirm('Wirklich alle Texte und Fotos löschen?')) return;
+  inputs.forEach((el,i)=>{el.value='';localStorage.removeItem('silberhochzeit_text_'+i)});
+  document.querySelectorAll('.photo').forEach((label,i)=>{
+    label.classList.remove('has-photo'); label.querySelector('img').removeAttribute('src');
+    label.querySelector('input').value=''; localStorage.removeItem('silberhochzeit_photo_'+i);
+  });
+};
+</script>
+</body>
+</html>
